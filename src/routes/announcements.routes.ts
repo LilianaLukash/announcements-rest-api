@@ -1,4 +1,5 @@
 import { Router } from "express";
+import { z } from "zod";
 import {
   createAnnouncement,
   deleteAnnouncement,
@@ -7,23 +8,54 @@ import {
   updateAnnouncement,
 } from "../controllers/announcements.controller.ts";
 import { authenticate } from "../middleware/authenticate.ts";
+import { upload } from "../middleware/upload.ts";
 import {
+  validateAnnouncementUpdate,
   validateBody,
   validateParams,
   validateQuery,
 } from "../middleware/validate.ts";
 import { registry } from "../openapi.ts";
 import {
+  announcementCategories,
   announcementIdParamSchema,
   announcementSchema,
   announcementsListSchema,
   createAnnouncementSchema,
   listAnnouncementsQuerySchema,
-  updateAnnouncementBodySchema,
-  updateAnnouncementSchema,
 } from "../validators/announcements.validator.ts";
 
 const router = Router();
+
+const announcementMultipartFields = z.object({
+  title: z.string().min(5).max(50),
+  description: z.string().min(10),
+  price: z.coerce.number().positive(),
+  category: z.enum(announcementCategories),
+  image: z
+    .string()
+    .optional()
+    .openapi({
+      type: "string",
+      format: "binary",
+      description: "Optional announcement photo",
+    }),
+});
+
+const updateAnnouncementMultipartFields = z.object({
+  title: z.string().min(5).max(50).optional(),
+  description: z.string().min(10).optional(),
+  price: z.coerce.number().positive().optional(),
+  category: z.enum(announcementCategories).optional(),
+  image: z
+    .string()
+    .optional()
+    .openapi({
+      type: "string",
+      format: "binary",
+      description: "Optional announcement photo",
+    }),
+});
 
 registry.registerPath({
   method: "get",
@@ -73,12 +105,14 @@ registry.registerPath({
   path: "/announcements",
   tags: ["Announcements"],
   summary: "Create announcement",
+  description:
+    "Create an announcement. Send multipart/form-data. Photo field name: image (optional).",
   security: [{ bearerAuth: [] }],
   request: {
     body: {
       content: {
-        "application/json": {
-          schema: createAnnouncementSchema,
+        "multipart/form-data": {
+          schema: announcementMultipartFields,
         },
       },
     },
@@ -102,13 +136,15 @@ registry.registerPath({
   path: "/announcements/{id}",
   tags: ["Announcements"],
   summary: "Update announcement",
+  description:
+    "Partially update an announcement. Send multipart/form-data. Photo field name: image (optional). At least one field or image is required.",
   security: [{ bearerAuth: [] }],
   request: {
     params: announcementIdParamSchema,
     body: {
       content: {
-        "application/json": {
-          schema: updateAnnouncementBodySchema,
+        "multipart/form-data": {
+          schema: updateAnnouncementMultipartFields,
         },
       },
     },
@@ -159,6 +195,7 @@ router.get(
 router.post(
   "/",
   authenticate,
+  upload.single("image"),
   validateBody(createAnnouncementSchema),
   createAnnouncement,
 );
@@ -166,7 +203,8 @@ router.patch(
   "/:id",
   authenticate,
   validateParams(announcementIdParamSchema),
-  validateBody(updateAnnouncementSchema),
+  upload.single("image"),
+  validateAnnouncementUpdate,
   updateAnnouncement,
 );
 router.delete(

@@ -12,12 +12,11 @@ export const announcementCategories = [
 export const createAnnouncementSchema = z.object({
   title: z.string().min(5).max(50),
   description: z.string().min(10),
-  price: z.number().positive(),
+  price: z.coerce.number().positive(),
   category: z.enum(announcementCategories),
 });
 
-export const updateAnnouncementBodySchema =
-  createAnnouncementSchema.partial();
+export const updateAnnouncementBodySchema = createAnnouncementSchema.partial();
 
 export const updateAnnouncementSchema = updateAnnouncementBodySchema.refine(
   (data) => Object.keys(data).length > 0,
@@ -44,6 +43,7 @@ export const announcementSchema = registry.register(
     description: z.string(),
     price: z.number(),
     category: z.enum(announcementCategories),
+    imageUrl: z.string().url().nullable().optional(),
     createdAt: z.string().datetime(),
     updatedAt: z.string().datetime(),
     user: userPublicSchema,
@@ -64,7 +64,9 @@ export const announcementsListSchema = registry.register(
 );
 
 export type CreateAnnouncementInput = z.infer<typeof createAnnouncementSchema>;
-export type UpdateAnnouncementInput = z.infer<typeof updateAnnouncementSchema>;
+export type UpdateAnnouncementInput = z.infer<
+  typeof updateAnnouncementBodySchema
+>;
 export type ListAnnouncementsQuery = z.infer<
   typeof listAnnouncementsQuerySchema
 >;

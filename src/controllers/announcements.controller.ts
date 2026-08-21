@@ -1,6 +1,8 @@
 import type { Request, Response, NextFunction } from "express";
 import type { Prisma } from "../../generated/prisma/client.ts";
 import prisma from "../../prisma/client.ts";
+import logger from "../logger.ts";
+import { uploadImageToCloudinary } from "../utils/cloudinary.ts";
 import type {
   CreateAnnouncementInput,
   ListAnnouncementsQuery,
@@ -15,6 +17,7 @@ const announcementSelect = {
   description: true,
   price: true,
   category: true,
+  imageUrl: true,
   createdAt: true,
   updatedAt: true,
   user: {
@@ -33,7 +36,8 @@ export async function listAnnouncements(
   next: NextFunction,
 ) {
   try {
-    const { search, sort, page } = req.query as unknown as ListAnnouncementsQuery;
+    const { search, sort, page } =
+      req.query as unknown as ListAnnouncementsQuery;
 
     const where: Prisma.AnnouncementWhereInput = {};
 
@@ -109,16 +113,28 @@ export async function createAnnouncement(
     const body = req.body as CreateAnnouncementInput;
     const userId = req.user!.sub;
 
+    let imageUrl: string | undefined;
+
+    if (req.file) {
+      imageUrl = await uploadImageToCloudinary(req.file.path);
+    }
+
     const announcement = await prisma.announcement.create({
       data: {
         title: body.title,
         description: body.description,
         price: body.price,
         category: body.category,
+        imageUrl,
         userId,
       },
       select: announcementSelect,
     });
+
+    logger.info(
+      { announcementId: announcement.id, userId, hasImage: Boolean(imageUrl) },
+      "Announcement created",
+    );
 
     return res.status(201).json(announcement);
   } catch (error) {
@@ -148,9 +164,22 @@ export async function updateAnnouncement(
       return res.status(403).json({ error: "Access denied" });
     }
 
+    let imageUrl: string | undefined;
+
+    if (req.file) {
+      imageUrl = await uploadImageToCloudinary(req.file.path);
+      logger.info(
+        { announcementId: id, userId },
+        "Announcement photo uploaded",
+      );
+    }
+
     const updated = await prisma.announcement.update({
       where: { id },
-      data: body,
+      data: {
+        ...body,
+        ...(imageUrl !== undefined ? { imageUrl } : {}),
+      },
       select: announcementSelect,
     });
 

@@ -22,9 +22,9 @@ export function generateOpenApiDocument() {
     openapi: "3.0.0",
     info: {
       title: "Announcements Board API",
-      version: "1.0.0",
+      version: "1.1.0",
       description:
-        "REST API for an announcements board with JWT authentication",
+        "REST API for an announcements board with JWT authentication, photo uploads, and production security middleware",
     },
     servers: [{ url: "http://localhost:3000" }],
   });

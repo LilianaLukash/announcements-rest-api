@@ -1,16 +1,17 @@
-import bcrypt from "bcrypt";
 import type { Request, Response, NextFunction } from "express";
-import jwt from "jsonwebtoken";
 import prisma from "../../prisma/client.ts";
+import logger from "../logger.ts";
+import { comparePassword, hashPassword } from "../utils/password.ts";
+import {
+  signAccessToken,
+  signRefreshToken,
+  verifyToken,
+} from "../utils/tokens.ts";
 import type {
   LoginInput,
   RefreshInput,
   RegisterInput,
 } from "../validators/auth.validator.ts";
-
-const ACCESS_TOKEN_EXPIRES_IN = "15m";
-const REFRESH_TOKEN_EXPIRES_IN = "7d";
-const BCRYPT_ROUNDS = 10;
 
 const userPublicSelect = {
   id: true,
@@ -18,26 +19,6 @@ const userPublicSelect = {
   email: true,
   name: true,
 } as const;
-
-function getJwtSecret(): string {
-  const secret = process.env.JWT_SECRET;
-  if (!secret) {
-    throw new Error("JWT_SECRET is not set");
-  }
-  return secret;
-}
-
-function signAccessToken(userId: number): string {
-  return jwt.sign({ sub: userId }, getJwtSecret(), {
-    expiresIn: ACCESS_TOKEN_EXPIRES_IN,
-  });
-}
-
-function signRefreshToken(userId: number): string {
-  return jwt.sign({ sub: userId }, getJwtSecret(), {
-    expiresIn: REFRESH_TOKEN_EXPIRES_IN,
-  });
-}
 
 async function createTokenPair(userId: number) {
   const accessToken = signAccessToken(userId);
@@ -71,7 +52,7 @@ export async function register(
       return res.status(409).json({ error: "Username or email already taken" });
     }
 
-    const hashedPassword = await bcrypt.hash(password, BCRYPT_ROUNDS);
+    const hashedPassword = await hashPassword(password);
 
     const user = await prisma.user.create({
       data: {
@@ -84,6 +65,8 @@ export async function register(
     });
 
     const tokens = await createTokenPair(user.id);
+
+    logger.info({ userId: user.id, username: user.username }, "User registered");
 
     return res.status(201).json({
       user,
@@ -106,7 +89,7 @@ export async function login(req: Request, res: Response, next: NextFunction) {
       return res.status(401).json({ error: "Invalid credentials" });
     }
 
-    const isValid = await bcrypt.compare(password, user.password);
+    const isValid = await comparePassword(password, user.password);
 
     if (!isValid) {
       return res.status(401).json({ error: "Invalid credentials" });
@@ -117,6 +100,8 @@ export async function login(req: Request, res: Response, next: NextFunction) {
     });
 
     const tokens = await createTokenPair(user.id);
+
+    logger.info({ userId: user.id, username: user.username }, "User logged in");
 
     return res.status(200).json({
       user: {
@@ -139,14 +124,8 @@ export async function refresh(req: Request, res: Response, next: NextFunction) {
     let decoded: { sub: number };
 
     try {
-      decoded = jwt.verify(refreshToken, getJwtSecret()) as unknown as {
-        sub: number;
-      };
+      decoded = verifyToken(refreshToken);
     } catch {
-      return res.status(401).json({ error: "Unauthorized" });
-    }
-
-    if (typeof decoded.sub !== "number") {
       return res.status(401).json({ error: "Unauthorized" });
     }
 

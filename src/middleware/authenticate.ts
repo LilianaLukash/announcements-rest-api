@@ -1,5 +1,5 @@
 import type { NextFunction, Request, Response } from "express";
-import jwt from "jsonwebtoken";
+import { verifyToken } from "../utils/tokens.ts";
 
 export type JwtPayload = {
   sub: number;
@@ -27,17 +27,7 @@ export function authenticate(req: Request, res: Response, next: NextFunction) {
   }
 
   try {
-    const secret = process.env.JWT_SECRET;
-    if (!secret) {
-      return res.status(500).json({ error: "Internal server error" });
-    }
-
-    const decoded = jwt.verify(token, secret) as unknown as JwtPayload;
-
-    if (typeof decoded.sub !== "number") {
-      return res.status(401).json({ error: "Unauthorized" });
-    }
-
+    const decoded = verifyToken(token);
     req.user = { sub: decoded.sub };
     next();
   } catch {

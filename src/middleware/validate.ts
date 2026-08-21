@@ -1,5 +1,6 @@
 import type { NextFunction, Request, Response } from "express";
 import type { ZodType } from "zod";
+import { updateAnnouncementBodySchema } from "../validators/announcements.validator.ts";
 
 function formatZodError(error: {
   issues: Array<{ path: PropertyKey[]; message: string }>;
@@ -8,9 +9,7 @@ function formatZodError(error: {
 
   for (const issue of error.issues) {
     const key =
-      issue.path.length > 0
-        ? issue.path.map(String).join(".")
-        : "_root";
+      issue.path.length > 0 ? issue.path.map(String).join(".") : "_root";
     if (!details[key]) {
       details[key] = [];
     }
@@ -79,4 +78,33 @@ export function validateQuery(schema: ZodType) {
     replaceRequestProperty(req, "query", result.data);
     next();
   };
+}
+
+export function validateAnnouncementUpdate(
+  req: Request,
+  res: Response,
+  next: NextFunction,
+) {
+  const result = updateAnnouncementBodySchema.safeParse(req.body);
+
+  if (!result.success) {
+    return res.status(400).json({
+      error: "Validation failed",
+      details: formatZodError(result.error),
+    });
+  }
+
+  const hasFields = Object.keys(result.data).length > 0;
+
+  if (!hasFields && !req.file) {
+    return res.status(400).json({
+      error: "Validation failed",
+      details: {
+        _root: ["At least one field must be provided"],
+      },
+    });
+  }
+
+  replaceRequestProperty(req, "body", result.data);
+  next();
 }

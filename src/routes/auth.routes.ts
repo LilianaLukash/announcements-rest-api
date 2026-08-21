@@ -7,6 +7,7 @@ import {
   register,
 } from "../controllers/auth.controller.ts";
 import { authenticate } from "../middleware/authenticate.ts";
+import { authRateLimiter } from "../middleware/rateLimit.ts";
 import { validateBody } from "../middleware/validate.ts";
 import { registry } from "../openapi.ts";
 import {
@@ -19,6 +20,8 @@ import {
 } from "../validators/auth.validator.ts";
 
 const router = Router();
+
+router.use(authRateLimiter);
 
 registry.registerPath({
   method: "post",
@@ -45,6 +48,7 @@ registry.registerPath({
     },
     400: { description: "Validation failed" },
     409: { description: "Username or email already taken" },
+    429: { description: "Too many requests" },
   },
 });
 
@@ -73,6 +77,7 @@ registry.registerPath({
     },
     400: { description: "Validation failed" },
     401: { description: "Invalid credentials" },
+    429: { description: "Too many requests" },
   },
 });
 
@@ -101,6 +106,7 @@ registry.registerPath({
     },
     400: { description: "Validation failed" },
     401: { description: "Unauthorized" },
+    429: { description: "Too many requests" },
   },
 });
 
@@ -113,6 +119,7 @@ registry.registerPath({
   responses: {
     204: { description: "Logged out" },
     401: { description: "Unauthorized" },
+    429: { description: "Too many requests" },
   },
 });
 
@@ -132,6 +139,7 @@ registry.registerPath({
       },
     },
     401: { description: "Unauthorized" },
+    429: { description: "Too many requests" },
   },
 });
 
